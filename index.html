@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Smart Agriculture in Hilly Areas</title>
+  <style>
+    :root {
+      --bg: #fdfdfd;
+      --fg: #222;
+      --primary: #2a9d8f;
+      --card-bg: #fff;
+      --muted: #666;
+      --card: #fff;
+      --text: #222;
+    }
+    [data-theme="dark"] {
+      --bg: #121212;
+      --fg: #eee;
+      --primary: #90caf9;
+      --card-bg: #1e1e1e;
+      --muted: #aaa;
+      --card: #1e1e1e;
+      --text: #eee;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: Arial, sans-serif;
+      background: var(--bg); color: var(--fg);
+      transition: background .3s, color .3s;
+    }
+    header {
+      position: sticky; top: 0;
+      background: var(--bg); z-index: 1000;
+      box-shadow: 0 2px 5px rgba(0,0,0,.1);
+    }
+    nav { display: flex; justify-content: space-between; align-items: center; padding: .5rem 1rem; }
+    nav a {
+      margin: 0 .5rem; text-decoration: none; color: var(--fg);
+      padding: .3rem .6rem; border-radius: .4rem;
+    }
+    nav a.active { background: var(--primary); color: #fff; }
+    .theme-toggle { cursor: pointer; border: none; padding: .4rem .8rem; border-radius: .4rem; }
+    section { padding: 3rem 1rem; }
+    h2 { color: var(--primary); }
+    .cards {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(250px,1fr));
+      gap: 1rem;
+    }
+    .card {
+      background: var(--card-bg);
+      padding: 1rem; border-radius: 1rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,.1);
+      transition: transform .3s;
+    }
+    .card:hover { transform: translateY(-5px); }
+    .pill { display:inline-block; margin:0 .25rem; color:var(--primary); font-size:.9em; }
+    .kpis { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .kpi { flex: 1; background: var(--card-bg); padding: 1rem; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .table { width: 100%; border-collapse: collapse; }
+    .table th, .table td { border: 1px solid var(--muted); padding: .5rem; text-align: left; }
+    .btn { padding:.5rem 1rem; border:none; border-radius:8px; background:var(--primary); color:#fff; cursor:pointer; }
+    .btn.primary { background: var(--primary); }
+    .muted { color: var(--muted); font-size:.9em; }
+    @media(max-width:800px) { .two-col { grid-template-columns: 1fr; } }
+    @media(max-width:600px) { nav { flex-direction: column; } }
+  </style>
+</head>
+<body>
+     <header>
+    <nav>
+      <div>
+        <a href="#home" class="active">Home</a>
+        <a href="#explore">Explore</a>
+        <a href="#dashboard">Dashboard</a>
+        <a href ="water.html">Water Monitor</a>
+        <a href="firebase.html">Farm Monitor</a>
+              </div>
+      <button id="themeToggle" class="theme-toggle">🌙</button>
+    </nav>
+  </header>
+
+  <section id="home">
+    <h1>Smart Agriculture in Hilly Areas</h1>
+    <p>
+      Explore sustainable irrigation methods and innovative farming techniques tailored for hilly regions.
+    </p>
+  </section>
+
+  <section id="explore">
+    <h2>Explore Methods & Techniques</h2>
+    <input id="search" placeholder="Search methods..." style="padding:.5rem; width:100%; max-width:400px;"/>
+    <div id="exploreCards" class="cards"></div>
+  </section>
+
+  <section id="dashboard">
+    <h2 style="margin:0 0 .5rem">Farmers Dashboard</h2>
+    <p class="muted" style="margin-top:0">Monitor your fields across elevations, schedule irrigation, and act on smart recommendations.</p>
+    
+    <div style="margin: 1rem 0; text-align: right;">
+      <button class="btn primary" id="simulateButton">Simulate Sensor Data ♻️</button>
+    </div>
+
+    <div class="kpis" id="kpis">
+      <div class="kpi"><div class="muted">Avg. Soil Moisture</div><strong id="kpiMoisture">—</strong></div>
+      <div class="kpi"><div class="muted">Water Used (7d)</div><strong id="kpiWater">—</strong></div>
+      <div class="kpi"><div class="muted">Pump Runtime</div><strong id="kpiPump">—</strong></div>
+      <div class="kpi"><div class="muted">Irrigation Efficiency</div><strong id="kpiEff">—</strong></div>
+    </div>
+
+    <div class="two-col" style="margin-top:1rem">
+      <div class="card">
+        <h3>Soil Moisture & Irrigation Events</h3>
+        <canvas id="moistureChart" class="chart" role="img" aria-label="Line chart of soil moisture and irrigation events"></canvas>
+      </div>
+      <div class="card">
+        <h3>Water Use Breakdown</h3>
+        <canvas id="waterPie" class="chart" role="img" aria-label="Pie chart of water consumption by method"></canvas>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:1rem">
+      <h3>Fields Overview</h3>
+      <div class="muted" style="margin-bottom:.5rem">Altitude-aware recommendations</div>
+      <div style="overflow:auto">
+        <table class="table" id="fieldsTable">
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Altitude (m)</th>
+              <th>Moisture (%)</th>
+              <th>Method</th>
+              <th>Next Action</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="two-col" style="margin-top:1rem">
+      <div class="card">
+        <h3>Tasks</h3>
+        <ul id="taskList" style="margin:.3rem 0 0; padding-left:1.2rem"></ul>
+        <div style="display:flex; gap:.5rem; margin-top:.8rem">
+          <input id="taskInput" placeholder="Add a task (e.g., Flush drip line on Terrace 2)" style="flex:1; padding:.6rem .8rem; border-radius:10px; border:1px solid var(--muted); background: var(--card); color: var(--text)" />
+          <button class="btn" id="addTask">Add</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Smart Alerts</h3>
+        <div id="alerts"></div>
+      </div>
+    </div>
+  </section>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // THEME TOGGLE
+    const themeBtn = document.getElementById('themeToggle');
+    const savedTheme = localStorage.getItem('theme');
+    if(savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+    themeBtn.textContent = document.documentElement.getAttribute('data-theme')==='dark'?'☀️':'🌙';
+    themeBtn.addEventListener('click', () => {
+      const cur = document.documentElement.getAttribute('data-theme');
+      const next = cur==='dark'?'light':'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+      themeBtn.textContent = next==='dark'?'☀️':'🌙';
+    });
+
+    // NAV ACTIVE HIGHLIGHT
+    const links = document.querySelectorAll('nav a');
+    const sections = document.querySelectorAll('section');
+    
+    const updateActiveLink = () => {
+        let currentSection = sections[0];
+        sections.forEach(sec => {
+            const rect = sec.getBoundingClientRect();
+            if (rect.top <= window.innerHeight * 0.5) {
+                currentSection = sec;
+            }
+        });
+
+        links.forEach(link => {
+            link.classList.remove('active');
+            if (link.getAttribute('href') === `#${currentSection.id}`) {
+                link.classList.add('active');
+            }
+        });
+    };
+    window.addEventListener('scroll', updateActiveLink);
+    updateActiveLink(); // Initial call
+
+    // EXPLORE DATA
+    const methods = [
+      {title:"Drip Irrigation", desc:"Delivers water directly to plant roots minimizing wastage.", tags:["irrigation","water-efficient"]},
+      {title:"Sprinkler Irrigation", desc:"Simulates rainfall, suitable for uneven hilly terrain.", tags:["irrigation","terrain"]},
+      {title:"Terrace Farming", desc:"Steps cut into hills reduce erosion & support irrigation.", tags:["irrigation","sustainable"]},
+      {title:"Mixed Farming", desc:"Combines crops & livestock for better land use and resilience.", tags:["tech","sustainable"]},
+      {title:"Precision Farming", desc:"Uses sensors, drones & AI for efficient resource usage.", tags:["tech","intensive"]},
+      {title:"Vertical Farming", desc:"Growing crops in stacked layers, useful for limited land.", tags:["tech","modern"]}
+    ];
+    const exploreDiv = document.getElementById('exploreCards');
+    function renderCards(filter=""){
+      exploreDiv.innerHTML = methods.filter(m => m.title.toLowerCase().includes(filter.toLowerCase()))
+        .map(m => `
+          <div class="card">
+            <h3>${m.title}</h3>
+            <p>${m.desc}</p>
+            <div>${m.tags.map(t => `<span class="pill">#${t}</span>`).join('')}</div>
+          </div>
+        `).join('');
+    }
+    renderCards();
+    document.getElementById('search').addEventListener('input', e => renderCards(e.target.value));
+
+    // DASHBOARD INTERACTIVITY
+    const ctxMoisture = document.getElementById('moistureChart');
+    const ctxPie = document.getElementById('waterPie');
+    let moistureChart = new Chart(ctxMoisture, {
+      type: 'line',
+      data: { labels:["Day 1","Day 2","Day 3","Day 4"], datasets:[{label:"Soil Moisture (%)", data:[40,45,50,48], borderColor:"var(--primary)", fill:false}]},
+      options:{responsive:true}
+    });
+    let waterPie = new Chart(ctxPie, {
+      type: 'pie',
+      data:{labels:["Drip","Sprinkler","Other"], datasets:[{data:[60,25,15], backgroundColor:["#2a9d8f","#90caf9","#e9c46a"]}]},
+      options:{responsive:true}
+    });
+
+    // KPI simulation
+    function updateKPIs(){
+      document.getElementById("kpiMoisture").textContent = (40+Math.random()*20).toFixed(1)+"%";
+      document.getElementById("kpiWater").textContent = (1000+Math.random()*500).toFixed(0)+" L";
+      document.getElementById("kpiPump").textContent = (10+Math.random()*5).toFixed(1)+" h";
+      document.getElementById("kpiEff").textContent = (70+Math.random()*10).toFixed(1)+"%";
+    }
+    document.getElementById("simulateButton").addEventListener("click", ()=>{
+      updateKPIs();
+      moistureChart.data.datasets[0].data.push(40+Math.random()*20);
+      moistureChart.data.labels.push("Day "+(moistureChart.data.labels.length+1));
+      moistureChart.update();
+      waterPie.data.datasets[0].data=[Math.random()*100, Math.random()*50, Math.random()*30];
+      waterPie.update();
+    });
+    updateKPIs();
+
+    // Fields Table
+    const fields = [
+      {name:"Terrace 1", alt:1200, moist:45, method:"Drip", action:"Irrigate in 2 days", status:"OK"},
+      {name:"Terrace 2", alt:1350, moist:38, method:"Sprinkler", action:"Irrigate tomorrow", status:"Low Moisture"},
+      {name:"Valley Plot", alt:900, moist:52, method:"Flood", action:"Monitor", status:"OK"}
+    ];
+    const tbody = document.querySelector("#fieldsTable tbody");
+    tbody.innerHTML = fields.map(f=>
+      `<tr>
+        <td>${f.name}</td><td>${f.alt}</td><td>${f.moist}</td><td>${f.method}</td><td>${f.action}</td><td>${f.status}</td>
+      </tr>`).join('');
+
+    // Tasks
+    const tasks=[], taskUl=document.getElementById('taskList');
+    function renderTasks(){
+      taskUl.innerHTML = tasks.map((t,i)=>
+        `<li>${t} <button onclick="removeTask(${i})">Done</button></li>`).join('');
+    }
+    document.getElementById('addTask').addEventListener('click',()=>{
+      const val=document.getElementById('taskInput').value.trim();
+      if(val){tasks.push(val); renderTasks(); document.getElementById('taskInput').value="";}
+    });
+    window.removeTask=i=>{tasks.splice(i,1); renderTasks();};
+
+    // Alerts
+    const alerts=["Rain expected tomorrow, cover seedlings.","Soil moisture low in Terrace 2."];
+    document.getElementById('alerts').innerHTML=alerts.map(a=>`<div>⚠️ ${a}</div>`).join("");
+  </script>
+</body>
+</html>

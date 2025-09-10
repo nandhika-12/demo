@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Water Level Monitoring — Auto/Manual</title>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+  :root{
+    --bg:#0f172a; --card:#0b1220; --muted:#9aa6b2; --accent:#22d3ee; --good:#34d399; --bad:#ef4444; --glass: rgba(255,255,255,0.03);
+  }
+  [data-theme="light"]{
+    --bg:#f7fbfc; --card:#ffffff; --muted:#5b6b73; --accent:#047481; --good:#059669; --bad:#b91c1c; --glass: rgba(15,23,42,0.04);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;color:var(--muted);background:linear-gradient(180deg,var(--bg),#08101a);min-height:100vh;padding:18px;}
+  .wrap{max-width:1100px;margin:0 auto;}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+  h1{color:var(--accent);margin:0;font-size:1.35rem}
+  .controls{display:flex;gap:.6rem;align-items:center}
+  .btn{background:var(--card);border:1px solid rgba(255,255,255,0.04);color:var(--muted);padding:.5rem .8rem;border-radius:10px;cursor:pointer}
+  .btn.primary{background:linear-gradient(90deg,var(--accent),#a78bfa);color:#061025;border: none;font-weight:700}
+  .card{background:var(--card);border-radius:12px;padding:12px;color:var(--muted);box-shadow:0 6px 18px rgba(2,6,23,.35);margin-bottom:12px}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .col{flex:1;min-width:260px}
+  .gauge {height:180px;display:grid;place-items:center}
+  .gauge .bar{width:120px;height:140px;border-radius:8px;background:linear-gradient(180deg,#052026,#06303a);position:relative;overflow:hidden;border:3px solid rgba(255,255,255,0.03)}
+  .bar-fill{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(180deg,var(--accent),#a78bfa);display:flex;align-items:flex-end;justify-content:center;padding-bottom:10px;color:#021018;font-weight:800;font-size:1.1rem;transition:height .6s ease}
+  .status {display:flex;gap:.6rem;align-items:center}
+  .tag{padding:.25rem .5rem;border-radius:8px;font-weight:700}
+  .tag.good{background:var(--good);color:#02210f}
+  .tag.bad{background:var(--bad);color:#2b0404}
+  label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:6px}
+  input[type="range"]{width:100%}
+  table{width:100%;border-collapse:collapse;color:var(--muted);font-size:.9rem}
+  th,td{padding:8px;border-bottom:1px dashed rgba(255,255,255,0.03);text-align:left}
+  .small{font-size:.85rem;color:var(--muted)}
+  .muted{color:var(--muted)}
+  footer{margin-top:28px;color:var(--muted);font-size:.85rem;text-align:center}
+  .theme-toggle{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:.35rem .55rem;border-radius:8px;color:var(--muted);cursor:pointer}
+  @media(max-width:760px){.row{flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <header>
+    <div>
+      <h1>Water Level Monitoring</h1>
+      <div class="small">Auto / Manual control • Simulated JSON sensor stream</div>
+    </div>
+
+    <div class="controls">
+      <button class="theme-toggle btn" id="themeBtn">Toggle Theme</button>
+      <button class="btn primary" id="exportBtn" title="Export current readings as JSON">Export JSON</button>
+    </div>
+  </header>
+
+  <!-- top row: gauge + settings -->
+  <div class="row">
+    <div class="col card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <div class="small">Current Water Level</div>
+          <div style="font-weight:800;font-size:1.05rem;color:var(--accent)" id="levelText">-- %</div>
+        </div>
+        <div class="status">
+          <div class="small">Mode</div>
+          <select id="modeSelect" class="btn" style="padding:.4rem">
+            <option value="auto">Auto</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <div style="text-align:right">
+          <div class="small">Pump</div>
+          <div id="pumpTag" class="tag bad">OFF</div>
+        </div>
+      </div>
+
+      <div class="gauge" aria-hidden="true">
+        <div class="bar" title="Water level">
+          <div class="bar-fill" id="barFill" style="height:20%">20%</div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+        <button class="btn" id="manualToggle" disabled>Toggle Pump</button>
+        <button class="btn" id="oneShot">Inject 1 Reading</button>
+        <button class="btn" id="startSim">Start Simulation</button>
+        <button class="btn" id="stopSim" disabled>Stop</button>
+      </div>
+    </div>
+
+    <div class="col card">
+      <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div>
+          <label for="threshold">Auto threshold (level %) — pump ON if level &lt; threshold</label>
+          <input id="threshold" type="range" min="5" max="90" value="35" />
+          <div class="small">Threshold: <span id="thresholdVal">35</span>%</div>
+        </div>
+        <div style="width:46%">
+          <label>Recent reading (JSON)</label>
+          <pre id="lastJson" style="background:var(--glass);padding:8px;border-radius:8px;height:90px;overflow:auto;margin:0">no data</pre>
+        </div>
+      </div>
+
+      <div style="margin-top:8px">
+        <label>Simulation controls</label>
+        <div style="display:flex;gap:8px">
+          <input id="simRate" class="btn" type="number" min="500" step="500" value="2000" style="width:110px" />
+          <div class="small" style="align-self:center">ms between readings</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- chart + readings table -->
+  <div class="row">
+    <div class="col card" style="min-height:300px">
+      <h3 style="margin-top:0">Water Level Chart</h3>
+      <canvas id="chart" height="160"></canvas>
+    </div>
+
+    <div class="col card" style="min-height:300px">
+      <h3 style="margin-top:0">Recent Readings (JSON)</h3>
+      <div style="max-height:350px;overflow:auto">
+        <table id="readingsTable" aria-live="polite">
+          <thead><tr><th>Time</th><th>Level%</th><th>Temp °C</th><th>Distance cm</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer class="small">Demo: simulated readings stored in-memory as JSON. Use Export to save current JSON array.</footer>
+</div>
+
+<script>
+/*
+  Single-file Water Level Monitor (simulation)
+  - produces random JSON readings periodically
+  - Auto: compares reading.level < threshold → pump ON
+  - Manual: user toggles pump
+  - UI: gauge, chart, table, recent JSON shown
+*/
+
+(() => {
+  // DOM
+  const levelText = document.getElementById('levelText');
+  const barFill = document.getElementById('barFill');
+  const threshold = document.getElementById('threshold');
+  const thresholdVal = document.getElementById('thresholdVal');
+  const modeSelect = document.getElementById('modeSelect');
+  const pumpTag = document.getElementById('pumpTag');
+  const manualToggle = document.getElementById('manualToggle');
+  const oneShot = document.getElementById('oneShot');
+  const startSim = document.getElementById('startSim');
+  const stopSim = document.getElementById('stopSim');
+  const simRate = document.getElementById('simRate');
+  const lastJson = document.getElementById('lastJson');
+  const readingsTable = document.querySelector('#readingsTable tbody');
+  const exportBtn = document.getElementById('exportBtn');
+  const themeBtn = document.getElementById('themeBtn');
+
+  // state
+  let readings = []; // array of JSON readings
+  let pumpOn = false;
+  let mode = 'auto'; // 'auto' | 'manual'
+  let simTimer = null;
+
+  // Chart setup
+  const ctx = document.getElementById('chart').getContext('2d');
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Water Level (%)',
+        data: [],
+        borderColor: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#22d3ee',
+        backgroundColor: 'rgba(34,211,238,0.12)',
+        tension: 0.2,
+        fill: true,
+        pointRadius: 2
+      }]
+    },
+    options: {
+      animation: {duration: 400},
+      scales: { y: { min:0, max:100 } },
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  // helpers
+  function nowISO(){ return new Date().toISOString(); }
+  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+
+  // create a random reading (simulate sensors)
+  function createRandomReading(){
+    // level: skew to test pump: random between 5 and 95
+    const level = Math.round( (Math.random()*90) + 5 );
+    const temp = (15 + Math.random()*18).toFixed(1);           // 15..33 °C
+    const distance = Math.round(20 + Math.random()*180);     // cm to bottom (tank)
+    return {
+      time: nowISO(),
+      level: level,
+      temperature: Number(temp),
+      distance_cm: distance
+    };
+  }
+
+  // apply auto/manual logic after receiving a reading
+  function processReading(r){
+    // push to array (simulate JSON stream)
+    readings.unshift(r); // newest first
+    if(readings.length>200) readings.pop();
+
+    // update UI: recent JSON and table
+    lastJson.textContent = JSON.stringify(r, null, 2);
+    updateTable();
+    updateChart();
+
+    // auto or manual
+    if(mode === 'auto'){
+      const th = Number(threshold.value);
+      if(r.level < th){
+        setPump(true, 'auto');
+      } else {
+        setPump(false, 'auto');
+      }
+    } else {
+      // manual: do nothing - pump stays in manual state until user toggles
+    }
+  }
+
+  function setPump(state, by='manual'){
+    pumpOn = !!state;
+    pumpTag.textContent = pumpOn ? 'ON' : 'OFF';
+    pumpTag.classList.toggle('good', pumpOn);
+    pumpTag.classList.toggle('bad', !pumpOn);
+    // optionally record pump action as a reading flag (not changing readings array here)
+    // show quick pulse in the UI (temporary)
+    if(by === 'auto'){
+      // flash a background to indicate auto action
+      const prev = pumpTag.style.boxShadow;
+      pumpTag.style.boxShadow = pumpOn ? '0 6px 14px rgba(52,211,153,.12)' : '0 6px 14px rgba(239,68,68,.08)';
+      setTimeout(()=> pumpTag.style.boxShadow = prev, 800);
+    }
+  }
+
+  // update table with readings
+  function updateTable(){
+    readingsTable.innerHTML = readings.slice(0,40).map(r => `
+      <tr>
+        <td>${(new Date(r.time)).toLocaleString()}</td>
+        <td>${r.level}</td>
+        <td>${r.temperature}</td>
+        <td>${r.distance_cm}</td>
+      </tr>
+    `).join('');
+  }
+
+  // update chart from readings
+  function updateChart(){
+    const latest = readings.slice(0,60).reverse(); // oldest->newest
+    chart.data.labels = latest.map(r => (new Date(r.time)).toLocaleTimeString());
+    chart.data.datasets[0].data = latest.map(r => r.level);
+    chart.update();
+    // update gauge
+    if(readings[0]){
+      const lv = clamp(readings[0].level, 0, 100);
+      levelText.textContent = lv + ' %';
+      barFill.style.height = lv + '%';
+      barFill.textContent = lv + '%';
+    }
+  }
+
+  // buttons / events
+  threshold.addEventListener('input', ()=> thresholdVal.textContent = threshold.value);
+  modeSelect.addEventListener('change', ()=> {
+    mode = modeSelect.value;
+    manualToggle.disabled = (mode !== 'manual');
+    // if switching to auto, immediately evaluate with last reading
+    if(mode === 'auto' && readings[0]){
+      processReading(readings[0]); // re-eval
+    }
+  });
+
+  manualToggle.addEventListener('click', ()=> {
+    if(mode === 'manual'){
+      setPump(!pumpOn, 'manual');
+    }
+  });
+
+  oneShot.addEventListener('click', ()=> {
+    const r = createRandomReading();
+    processReading(r);
+  });
+
+  startSim.addEventListener('click', ()=> {
+    const rate = Math.max(200, Number(simRate.value) || 2000);
+    if(simTimer) clearInterval(simTimer);
+    simTimer = setInterval(()=> {
+      const r = createRandomReading();
+      processReading(r);
+    }, rate);
+    startSim.disabled = true;
+    stopSim.disabled = false;
+  });
+
+  stopSim.addEventListener('click', ()=> {
+    if(simTimer) { clearInterval(simTimer); simTimer = null; }
+    startSim.disabled = false;
+    stopSim.disabled = true;
+  });
+
+  exportBtn.addEventListener('click', ()=> {
+    const blob = new Blob([JSON.stringify(readings, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'water-readings.json'; document.body.appendChild(a);
+    a.click(); a.remove(); URL.revokeObjectURL(url);
+  });
+
+  // theme toggle (simple)
+  themeBtn.addEventListener('click', ()=> {
+    if(document.documentElement.hasAttribute('data-theme')){
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.setAttribute('data-theme','light');
+    }
+  });
+
+  // startup: generate a few seed readings so the UI isn't empty
+  (function seed(){
+    for(let i=0;i<8;i++){
+      const r = createRandomReading();
+      // slightly stagger timestamps into past
+      r.time = new Date(Date.now() - (8-i)*1000).toISOString();
+      readings.push(r);
+    }
+    readings.reverse(); // newest first desired (we push then reverse for initial)
+    readings = readings.slice().reverse(); // unify format so processReading works with newest first
+    // ensure display uses newest as readings[0] — if you want newest first, we can keep as-is
+    // For consistency with other code, ensure readings[0] is newest
+    readings = readings.reverse(); // now newest at index 0
+    updateChart();
+    updateTable();
+    lastJson.textContent = readings[0] ? JSON.stringify(readings[0],null,2) : 'no data';
+  })();
+
+  // nice: auto-start simulation (optional). Comment out if not desired.
+  // startSim.click();
+
+  // ensure manual toggle disabled by default (since default mode is auto)
+  manualToggle.disabled = true;
+
+})();
+</script>
+</body>
+</html>

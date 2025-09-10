@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AgroLive • Realtime Farm Monitor</title>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{
+      --bg:#0b1220; --card:#0f1726; --muted:#9aa6b2; --accent:#22d3ee; --good:#34d399; --bad:#ef4444; --glass: rgba(255,255,255,0.03);
+      --text:#e6eef6;
+    }
+    .light { --bg:#f6fbfb; --card:#ffffff; --muted:#475569; --accent:#047481; --good:#059669; --bad:#b91c1c; --text:#071028; --glass: rgba(2,6,23,0.03); }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial;color:var(--text);background:linear-gradient(180deg,var(--bg),#031024);min-height:100vh;transition:background .25s,color .25s}
+    header{position:sticky;top:0;background:color-mix(in oklab,var(--bg) 88%,transparent);backdrop-filter:blur(6px);border-bottom:1px solid rgba(255,255,255,0.02);z-index:50}
+    .nav{max-width:1100px;margin:0 auto;padding:.8rem 1rem;display:flex;align-items:center;gap:1rem}
+    .brand{font-weight:800;color:var(--accent);display:flex;align-items:center;gap:.6rem}
+    .navlinks{margin-left:auto;display:flex;gap:.4rem}
+    .navlinks a{color:var(--text);text-decoration:none;padding:.45rem .7rem;border-radius:10px;font-weight:600}
+    .navlinks a.active, .navlinks a:hover{background: color-mix(in oklab,var(--accent) 12%, transparent)}
+    .toggle{margin-left:.6rem;padding:.45rem .7rem;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:var(--card);cursor:pointer}
+    main{max-width:1100px;margin:1.25rem auto;padding:0 1rem}
+    h1{margin:.2rem 0;font-size:1.4rem}
+    .grid{display:grid;gap:1rem}
+    @media(min-width:900px){ .grid.cols-4{grid-template-columns:repeat(4,1fr)} .grid.cols-2{grid-template-columns:repeat(2,1fr)} }
+    .card{background:var(--card);padding:1rem;border-radius:12px;box-shadow:0 6px 22px rgba(2,6,23,.45);border:1px solid rgba(255,255,255,0.02)}
+    .muted{color:var(--muted);font-size:.92rem}
+    .kpi-value{font-size:1.5rem;font-weight:800;margin-top:.25rem}
+    .status-tag{padding:.35rem .6rem;border-radius:999px;font-weight:800}
+    .status-tag.on{background:var(--good);color:#07210d}
+    .status-tag.off{background:var(--bad);color:#2b0404}
+    .controls{display:flex;gap:.5rem;align-items:center}
+    .btn{padding:.45rem .65rem;border-radius:10px;border:1px solid rgba(255,255,255,0.03);background:var(--card);color:var(--text);cursor:pointer}
+    .btn.primary{background:linear-gradient(90deg,var(--accent),#a78bfa);color:#021028;border:none;font-weight:700}
+    .footer{margin-top:1.2rem;color:var(--muted);font-size:.85rem;text-align:center}
+    pre{background:var(--glass);padding:.6rem;border-radius:8px;overflow:auto;color:var(--text);font-size:.9rem}
+    .controls small{color:var(--muted);display:block;font-size:.82rem}
+    /* small helpers */
+    .flex{display:flex;gap:.6rem;align-items:center}
+    .right{margin-left:auto}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="nav">
+      <div class="brand">⛰️ AgroLive</div>
+      <nav class="navlinks" aria-label="Primary">
+        <a href="#dashboard" class="active">Dashboard</a>
+        <a href="#about">About</a>
+      </nav>
+
+      <div class="controls right">
+        <button id="themeBtn" class="toggle" aria-label="Toggle theme">🌗</button>
+        <button id="simulateToggle" class="btn" title="Toggle simulation">Simulate</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- DASHBOARD -->
+    <section id="dashboard">
+      <div style="display:flex;gap:1rem;align-items:end;flex-wrap:wrap">
+        <div>
+          <h1>Realtime Farm Monitor</h1>
+          <div class="muted">Live values from Firebase Realtime Database — soil moisture, temperature, tank distance, pump status.</div>
+        </div>
+        <div class="right flex" style="margin-left:auto">
+          <div style="text-align:right">
+            <small class="muted">Database path</small>
+            <div id="dbPath" class="muted">/AgroSmart</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid cols-4" style="margin-top:1rem">
+        <div class="card">
+          <div class="muted">Soil Moisture</div>
+          <div id="soilVal" class="kpi-value">— %</div>
+          <div class="muted">Recent</div>
+          <pre id="soilJson">no data</pre>
+        </div>
+
+        <div class="card">
+          <div class="muted">Temperature</div>
+          <div id="tempVal" class="kpi-value">— °C</div>
+          <div class="muted">Recent</div>
+          <pre id="tempJson">no data</pre>
+        </div>
+
+        <div class="card">
+          <div class="muted">Tank Water Distance</div>
+          <div id="distVal" class="kpi-value">— cm</div>
+          <div class="muted">Recent</div>
+          <pre id="distJson">no data</pre>
+        </div>
+
+        <div class="card">
+          <div class="muted">Pump Status</div>
+          <div style="margin-top:.35rem"><span id="pumpVal" class="status-tag off">—</span></div>
+          <div style="margin-top:.6rem" class="muted">Last update</div>
+          <div id="pumpTime" class="muted">—</div>
+        </div>
+      </div>
+
+      <div style="display:grid;gap:1rem;margin-top:1rem">
+        <div class="card">
+          <canvas id="lineChart" height="90"></canvas>
+        </div>
+
+        <div class="card" style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center">
+          <div style="flex:1">
+            <div class="muted">Raw JSON snapshot (for debugging)</div>
+            <pre id="rawJson">not connected</pre>
+          </div>
+          <div style="width:260px">
+            <div class="muted">Controls</div>
+            <div style="display:flex;gap:.5rem;margin-top:.6rem">
+              <button id="clearHistory" class="btn">Clear chart</button>
+              <button id="downloadLog" class="btn">Download JSON</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">Replace firebaseConfig in the script with your project's config. Using Realtime Database path: <strong>/AgroSmart</strong>.</div>
+    </section>
+
+    <section id="about" style="margin-top:2rem">
+      <div class="card">
+        <h3>About this demo</h3>
+        <p class="muted">This technique is crucial for preventing soil erosion, as it slows down the flow of rainwater and allows it to seep into the soil.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Firebase modular SDK (v9+) -->
+  <script type="module">
+    // ----- CONFIGURE THIS ----- //
+    // Replace with your Firebase project config (found in Firebase console -> project settings -> web app)
+    const firebaseConfig = {
+  apiKey: "AIzaSyAeKLK_hId9hxtL5BD7-4I0nUTvhyINQvQ",
+  authDomain: "smartagri-209a9.firebaseapp.com",
+  databaseURL: "https://smartagri-209a9-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "smartagri-209a9",
+  storageBucket: "smartagri-209a9.firebasestorage.app",
+  messagingSenderId: "387009834210",
+  appId: "1:387009834210:web:985abe1b180d7ece2542bb",
+  measurementId: "G-24HFVB623Z"
+};    // -------------------------- //
+
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import { getDatabase, ref, onValue, push, set, child, get } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+
+    // UI refs
+    const soilVal = document.getElementById('soilVal');
+    const tempVal = document.getElementById('tempVal');
+    const distVal = document.getElementById('distVal');
+    const pumpVal = document.getElementById('pumpVal');
+    const pumpTime = document.getElementById('pumpTime');
+    const rawJson = document.getElementById('rawJson');
+    const soilJson = document.getElementById('soilJson');
+    const tempJson = document.getElementById('tempJson');
+    const distJson = document.getElementById('distJson');
+    const dbPathEl = document.getElementById('dbPath');
+
+    // Chart setup (soil moisture + distance)
+    const ctx = document.getElementById('lineChart').getContext('2d');
+    const chartData = { labels: [], datasets: [
+      { label:'Soil Moisture (%)', data: [], borderColor:'#22d3ee', backgroundColor:'rgba(34,211,238,0.09)', tension:0.2, yAxisID:'y' },
+      { label:'Tank Distance (cm)', data: [], borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,0.06)', tension:0.2, yAxisID:'y1' }
+    ]};
+    const lineChart = new Chart(ctx, {
+      type:'line',
+      data: chartData,
+      options:{
+        responsive:true,
+        interaction:{mode:'index', intersect:false},
+        scales:{
+          y:{ type:'linear', position:'left', min:0, max:100, title:{display:true, text:'Moisture %'} },
+          y1:{ type:'linear', position:'right', grid:{drawOnChartArea:false}, min:0, max:300, title:{display:true, text:'Distance cm'} }
+        }
+      }
+    });
+
+    // App state
+    let db = null;
+    let agroRef = null;
+    let simulate = false;
+    let localHistory = []; // store recent readings
+
+    // Theme toggle
+    const themeBtn = document.getElementById('themeBtn');
+    themeBtn.addEventListener('click', () => document.documentElement.classList.toggle('light'));
+
+    // Simulate toggle
+    const simulateToggle = document.getElementById('simulateToggle');
+    simulateToggle.addEventListener('click', () => {
+      simulate = !simulate;
+      simulateToggle.textContent = simulate ? 'Simulating (ON)' : 'Simulate';
+      if(simulate){ startSimulation(); } else { stopSimulation(); }
+    });
+
+    // Clear chart
+    document.getElementById('clearHistory').addEventListener('click', ()=> {
+      chartData.labels.length = 0;
+      chartData.datasets.forEach(ds=>ds.data.length = 0);
+      lineChart.update();
+      localHistory.length = 0;
+    });
+
+    // Download JSON log
+    document.getElementById('downloadLog').addEventListener('click', ()=>{
+      const blob = new Blob([JSON.stringify(localHistory, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'agro-readings.json'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    // initialize Firebase (wrapped so missing config doesn't crash)
+    function initFirebase(){
+      try{
+        // if default placeholder left, skip connecting
+        if(firebaseConfig.apiKey === "REPLACE_ME" || !firebaseConfig.databaseURL){
+          rawJson.textContent = 'Firebase config not set. Toggle SIMULATE to test.';
+          dbPathEl.textContent = '/AgroSmart (local simulation)';
+          return null;
+        }
+        const app = initializeApp(firebaseConfig);
+        db = getDatabase(app);
+        agroRef = ref(db, '/AgroSmart');
+        dbPathEl.textContent = '/AgroSmart';
+        attachRealtimeListener();
+        rawJson.textContent = 'Connected — waiting for data...';
+        return db;
+      }catch(e){
+        rawJson.textContent = 'Firebase init error: ' + e.message;
+        return null;
+      }
+    }
+
+    // Subscribe to realtime updates
+    function attachRealtimeListener(){
+      if(!agroRef) return;
+      onValue(agroRef, (snapshot) => {
+        const val = snapshot.val();
+        rawJson.textContent = JSON.stringify(val, null, 2);
+        // read fields — tolerant to different structure
+        const soil = val?.soilMoisture ?? val?.SoilMoisture ?? val?.soil ?? null;
+        const temp = val?.temperature ?? val?.Temperature ?? val?.temp ?? null;
+        const dist = val?.tankDistance ?? val?.waterDistance ?? val?.WaterLevel_cm ?? val?.distance_cm ?? null;
+        const pump = val?.pumpStatus ?? val?.PumpStatus ?? val?.pump ?? null;
+        const ts = new Date().toLocaleString();
+        updateUI({soil, temp, dist, pump, raw: val, time: ts});
+        // optionally record into local history for charting
+        pushToChart({time: new Date(), soil, dist});
+      }, (err) => {
+        rawJson.textContent = 'Realtime error: '+err;
+      });
+    }
+
+    // Update UI elements
+    function updateUI({soil, temp, dist, pump, raw, time}){
+      soilVal.textContent = (soil===null ? '—' : (typeof soil === 'number' ? soil.toFixed(1) : soil) + ' %');
+      tempVal.textContent = (temp===null ? '—' : (typeof temp === 'number' ? temp.toFixed(1) : temp) + ' °C');
+      distVal.textContent = (dist===null ? '—' : (typeof dist === 'number' ? dist : dist) + ' cm');
+      soilJson.textContent = JSON.stringify({value:soil, time}, null, 2);
+      tempJson.textContent = JSON.stringify({value:temp, time}, null, 2);
+      distJson.textContent = JSON.stringify({value:dist, time}, null, 2);
+      pumpVal.textContent = pump ?? '—';
+      if((pump||'').toString().toLowerCase() === 'on') { pumpVal.classList.add('on'); pumpVal.classList.remove('off'); pumpVal.classList.remove('off'); pumpVal.classList.remove('off'); pumpVal.classList.remove('off'); }
+      else { pumpVal.classList.remove('on'); pumpVal.classList.add('off'); }
+      pumpTime.textContent = time ?? new Date().toLocaleString();
+    }
+
+    // push values into chart and history
+    function pushToChart({time, soil, dist}){
+      const label = (time instanceof Date) ? time.toLocaleTimeString() : new Date().toLocaleTimeString();
+      chartData.labels.push(label);
+      chartData.datasets[0].data.push(soil ?? null);
+      chartData.datasets[1].data.push(dist ?? null);
+      // keep length
+      if(chartData.labels.length > 40){
+        chartData.labels.shift();
+        chartData.datasets.forEach(ds=>ds.data.shift());
+      }
+      lineChart.update();
+      // store to local history (for download)
+      localHistory.push({time: (time instanceof Date) ? time.toISOString() : new Date().toISOString(), soil, dist});
+      if(localHistory.length > 1000) localHistory.shift();
+      document.getElementById('rawJson').textContent = JSON.stringify(localHistory.slice(-8).reverse(), null, 2);
+    }
+
+    // ---------- Simulation helpers ----------
+    let simInterval = null;
+    function randomReading(){
+      return {
+        soilMoisture: +(30 + Math.random()*50).toFixed(1),
+        temperature: +(14 + Math.random()*18).toFixed(1),
+        tankDistance: +(20 + Math.random()*140).toFixed(0),
+        pumpStatus: (Math.random() > 0.35) ? 'OFF' : 'ON',
+        ts: new Date().toISOString()
+      };
+    }
+
+    function startSimulation(){
+      // If Firebase configured, optionally push simulated data to DB (commented out by default)
+      simInterval = setInterval(()=>{
+        const r = randomReading();
+        // update UI locally
+        updateUI({soil:r.soilMoisture, temp:r.temperature, dist:r.tankDistance, pump:r.pumpStatus, raw:r, time: new Date().toLocaleString()});
+        pushToChart({time:new Date(), soil:r.soilMoisture, dist:r.tankDistance});
+        // If DB connected, write to /AgroSmart (uncomment to push)
+        if(db && agroRef){
+          // set(agroRef, { // uncomment to push to your DB
+          //   soilMoisture: r.soilMoisture,
+          //   temperature: r.temperature,
+          //   tankDistance: r.tankDistance,
+          //   pumpStatus: r.pumpStatus,
+          //   updatedAt: r.ts
+          // });
+        }
+      }, 2000);
+    }
+    function stopSimulation(){ if(simInterval){ clearInterval(simInterval); simInterval=null; } }
+
+    // ---------- boot ----------
+    initFirebase();
+
+    // if firebase not set, enable simulate button text
+    if(firebaseConfig.apiKey === "REPLACE_ME" || !firebaseConfig.databaseURL){
+      simulateToggle.textContent = 'Simulate (recommended)';
+    } else {
+      // automatically attach listener if connected
+      if(agroRef) attachRealtimeListener();
+    }
+
+    // quick start: you can optionally start simulate automatically
+    // simulate = true; startSimulation();
+
+ </script>
+</body>
+</html>
